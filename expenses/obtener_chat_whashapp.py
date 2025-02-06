@@ -62,26 +62,51 @@ def process_message(date_str, time_str, name, message, start_date, end_date):
     entry_type = "Mensaje"
     image_path = ""
     
-    if "IMG-" in message or "Comprobante_" in message:
+    if "IMG-" in message:
         entry_type = "Imagen"
+        image_path = os.path.join('expenses/data', message.split(' ')[0])
+        if os.path.exists(image_path):
+            try:
+                img = Image.open(image_path)
+                ocr_text = reader.readtext(image_path, detail=0)
+                ocr_text = ' '.join(ocr_text)
+                message += f" OCR: {ocr_text} (Image path: {image_path})"
+                print(f"Extracted OCR text from {image_path}: {ocr_text}")
+                ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)", ocr_text)
+                if ocr_numbers:
+                    number = float(ocr_numbers[0].replace('.', '').replace(',', '.'))
+                    print(f"Extracted amount from OCR text: {number}")
+                else:
+                    number = "Verifique"
+                    print(f"No amount found in OCR text for {image_path}")
+            except Exception as e:
+                print(f"Error processing image {image_path}: {e}")
+                number = "Verifique"
+    elif "Comprobante_" in message:
+        entry_type = "Comprobante"
         image_path = os.path.join('expenses/data', message.split(' ')[0])
         if os.path.exists(image_path):
             try:
                 if image_path.lower().endswith('.pdf'):
                     ocr_text = extract_text_from_pdf(image_path)
                 else:
-                    img = Image.open(image_path)
                     ocr_text = reader.readtext(image_path, detail=0)
                     ocr_text = ' '.join(ocr_text)
-                message += f" OCR: {ocr_text} (Image path: {image_path})"
+                message += f" OCR: {ocr_text} (Document path: {image_path})"
+                print(f"Extracted OCR text from {image_path}: {ocr_text}")
                 ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)", ocr_text)
                 if ocr_numbers:
                     number = float(ocr_numbers[0].replace('.', '').replace(',', '.'))
+                    print(f"Extracted amount from OCR text: {number}")
                 else:
                     number = "Verifique"
+                    print(f"No amount found in OCR text for {image_path}")
             except Exception as e:
-                print(f"Error processing image {image_path}: {e}")
+                print(f"Error processing document {image_path}: {e}")
                 number = "Verifique"
+    elif "DOC-" in message:
+        number = "Verifique"
+        print(f"Message contains DOC-, setting number to Verifique: {message}")
     elif "STK-" in message or "PTT-" in message:
         return None
     else:
