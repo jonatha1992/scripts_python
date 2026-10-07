@@ -44,24 +44,65 @@ def extract_text_from_pdf(pdf_path):
         print(f"Error reading PDF {pdf_path}: {e}")
     return text
 
+def parse_chat_date(date_str: str):
+    """Parsea fechas de chats de WhatsApp con prioridad a formatos locales (%d/%m/%Y)."""
+    formats = [
+        "%d/%m/%Y", "%d/%m/%y",
+        "%m/%d/%Y", "%m/%d/%y",
+        "%Y-%m-%d"
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str.strip(), fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def parse_amount(text: str):
+    """Parsea montos monetarios reconociendo separadores de miles y decimales."""
+    if not text:
+        return "Verifique"
+    clean = str(text).strip().replace('$', '').strip()
+    if not clean:
+        return "Verifique"
+
+    # Formato 1.234,56
+    if re.search(r'^\d{1,3}(\.\d{3})*,\d{1,2}$', clean):
+        clean = clean.replace('.', '').replace(',', '.')
+    # Formato 1,234.56
+    elif re.search(r'^\d{1,3}(,\d{3})*\.\d{1,2}$', clean):
+        clean = clean.replace(',', '')
+    # Formato con coma decimal sin separador de miles: 1234,56
+    elif ',' in clean and '.' not in clean:
+        clean = clean.replace(',', '.')
+    # Formato con un solo punto decimal y hasta 2 decimales: 1234.56
+    elif clean.count('.') == 1 and len(clean.split('.')[1]) <= 2:
+        pass
+    # Formato con puntos como miles sin decimales: 15.000
+    elif clean.count('.') > 0:
+        clean = clean.replace('.', '')
+
+    try:
+        return float(clean)
+    except (ValueError, TypeError):
+        return "Verifique"
+
+
 def process_message(date_str, time_str, name, message, start_date, end_date):
     """Process each message to extract relevant information."""
-    try:
-        message_date = datetime.strptime(date_str, "%m/%d/%Y")
-    except ValueError:
-        try:
-            message_date = datetime.strptime(date_str, "%m/%d/%y")
-        except ValueError:
-            print(f"Error parsing date: {date_str}")
-            return None
-    
+    message_date = parse_chat_date(date_str)
+    if not message_date:
+        print(f"Error parsing date: {date_str}")
+        return None
+
     if not (start_date <= message_date <= end_date):
         return None
 
     number = 0
     entry_type = "Mensaje"
     image_path = ""
-    
+
     if "IMG-" in message:
         entry_type = "Imagen"
         image_path = os.path.join('expenses/data', message.split(' ')[0])
@@ -72,9 +113,9 @@ def process_message(date_str, time_str, name, message, start_date, end_date):
                 ocr_text = ' '.join(ocr_text)
                 message += f" OCR: {ocr_text} (Image path: {image_path})"
                 print(f"Extracted OCR text from {image_path}: {ocr_text}")
-                ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)", ocr_text)
+                ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)", ocr_text)
                 if ocr_numbers:
-                    number = float(ocr_numbers[0].replace('.', '').replace(',', '.'))
+                    number = parse_amount(ocr_numbers[0])
                     print(f"Extracted amount from OCR text: {number}")
                 else:
                     number = "Verifique"
@@ -94,9 +135,9 @@ def process_message(date_str, time_str, name, message, start_date, end_date):
                     ocr_text = ' '.join(ocr_text)
                 message += f" OCR: {ocr_text} (Document path: {image_path})"
                 print(f"Extracted OCR text from {image_path}: {ocr_text}")
-                ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)", ocr_text)
+                ocr_numbers = re.findall(r"\$\s?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?)", ocr_text)
                 if ocr_numbers:
-                    number = float(ocr_numbers[0].replace('.', '').replace(',', '.'))
+                    number = parse_amount(ocr_numbers[0])
                     print(f"Extracted amount from OCR text: {number}")
                 else:
                     number = "Verifique"
@@ -110,10 +151,11 @@ def process_message(date_str, time_str, name, message, start_date, end_date):
     elif "STK-" in message or "PTT-" in message:
         return None
     else:
-        number_match = re.search(r"(\d+(?:\.\d{2})?)", message)
+        number_match = re.search(r"\$\s?([0-9.,]+)|(\d+(?:[.,]\d{1,2})?)", message)
         if number_match:
-            number = float(number_match.group(1).replace('.', '').replace(',', '.'))
-    
+            raw_val = number_match.group(1) or number_match.group(2)
+            number = parse_amount(raw_val)
+
     return {"Fecha": date_str, "Hora": time_str, "Nombre": name, "Mensaje": message, "Monto": number, "Tipo": entry_type, "Path": image_path}
 
 def create_dataframe(matches, start_date, end_date):
