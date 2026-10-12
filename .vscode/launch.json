@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: archivo actual",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: depurar_mail.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/mail/depurar_mail.py",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Python: obtener_chat_whashapp.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/expenses_read_whatsaap/obtener_chat_whashapp.py",
+      "console": "integratedTerminal"
+    }
+  ]
+}
